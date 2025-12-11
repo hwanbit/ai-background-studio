@@ -1,0 +1,85 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+
+# Python
+*.py[cod]
+*$py.class
+*.so
+__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+
+# 이미지 파일들
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.webp
+*.ico
+
+# 단, favicon은 제외 (필요한 경우)
+!static/imgFavicon.ico
+!static/*.ico
+
+# 업로드 폴더 (있는 경우)
+image/
+
+# HuggingFace 캐시 (SAM 모델 캐시)
+.cache/
+transformers_cache/
+huggingface/
+~/.cache/huggingface/
+
+# PyTorch 캐시
+.torch/
+
+# 환경 변수
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 테스트 관련
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 배포 관련
+*.egg-info/
+dist/
+build/

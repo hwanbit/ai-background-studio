@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image" href="/static/imgFavicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 배경 합성 스튜디오</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        canvas {
+            border: 2px dashed #ccc;
+            background-color: #f0f0f0;
+            background-image:
+                linear-gradient(45deg, #ddd 25%, transparent 25%),
+                linear-gradient(-45deg, #ddd 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ddd 75%),
+                linear-gradient(-45deg, transparent 75%, #ddd 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            cursor: move;
+            max-width: 100%;
+        }
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            z-index: 50;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+            animation: slideIn 0.3s ease-out;
+            max-width: 400px;
+        }
+        .toast.hide {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        .toast-error { border-left: 4px solid #ef4444; }
+        .toast-success { border-left: 4px solid #10b981; }
+        .toast-info { border-left: 4px solid #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col justify-center items-center font-sans">
+
+    <!-- 메인 컨테이너 -->
+    <div class="max-w-4xl w-full mx-auto bg-white rounded-lg shadow-lg p-6 my-8">
+        <h1 class="text-3xl font-bold mb-6 text-center text-indigo-600">AI 배경 합성 스튜디오</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- 입력 컨트롤 -->
+            <div class="space-y-4">
+                <div class="p-4 border rounded bg-gray-50">
+                    <label class="block font-semibold mb-2">1. 사람 이미지</label>
+                    <input type="file" id="personInput" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+                    <button onclick="removeBackground()" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition">
+                        AI 배경 합성 실행
+                    </button>
+                </div>
+
+                <div class="p-4 border rounded bg-gray-50">
+                    <label class="block font-semibold mb-2">2. 배경 이미지<br>(선택하지 않을 시 투명 배경이 적용됩니다.)</label>
+                    <input type="file" id="bgInput" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                </div>
+
+                <div class="p-4 border rounded bg-gray-50">
+                    <label class="block font-semibold mb-2">3. 사람 크기 조절<label>
+                    <input type="range" id="scaleSlider" min="0.1" max="2.0" step="0.1" value="1.0" class="w-full cursor-pointer" disabled>
+                    <p class="text-xs text-gray-500 mt-1">* 캔버스 위에서 드래그하여 위치 이동 가능</p>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="resetCanvas()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded transition">초기화</button>
+                    <button onclick="downloadImage()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded transition">이미지 다운로드</button>
+                </div>
+            </div>
+
+            <!-- 캔버스 영역 -->
+            <div class="flex justify-center items-center bg-gray-200 rounded border min-h-[400px]">
+                <canvas id="mainCanvas"></canvas>
+                <div id="placeholderText" class="text-gray-500 absolute pointer-events-none">이미지를 업로드해주세요</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 푸터 -->
+    <footer class="w-full text-center p-4 text-gray-500 text-sm">
+        © 2025 Elphie. All rights reserved.
+    </footer>
+
+    <!-- 로딩 인디케이터 -->
+    <div id="loadingOverlay" class="loading">
+        <div>
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p>AI가 이미지를 분석중입니다...</p>
+        </div>
+    </div>
+
+    <script>
+        // Toast 알림 함수
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+
+            toast.innerHTML = `
+                <span style="font-size: 20px;">${icon}</span>
+                <span style="color: #374151; font-weight: 500;">${message}</span>
+            `;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const scaleSlider = document.getElementById('scaleSlider');
+        const placeholderText = document.getElementById('placeholderText');
+
+        let bgImage = null;
+        let personImage = null;
+
+        let personState = {
+            x: 0,
+            y: 0,
+            scale: 1.0,
+            isDragging: false,
+            startX: 0,
+            startY: 0
+        };
+
+        canvas.width = 600;
+        canvas.height = 400;
+
+        // 배경 이미지 업로드 처리
+        document.getElementById('bgInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                bgImage = new Image();
+                bgImage.onload = function() {
+                    const aspectRatio = bgImage.width / bgImage.height;
+                    canvas.width = 600;
+                    canvas.height = 600 / aspectRatio;
+                    placeholderText.style.display = 'none';
+                    draw();
+                }
+                bgImage.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        // AI 배경 제거 요청
+        async function removeBackground() {
+            const fileInput = document.getElementById('personInput');
+            if (!fileInput.files[0]) {
+                showToast('사람 이미지를 선택해주세요.', 'error');
+                return;
+            }
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            const formData = new FormData();
+            formData.append('person_image', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Server Error");
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+
+                personImage = new Image();
+                personImage.onload = function() {
+                    personState.x = canvas.width / 2 - (personImage.width * personState.scale) / 2;
+                    personState.y = canvas.height / 2 - (personImage.height * personState.scale) / 2;
+
+                    document.getElementById('scaleSlider').disabled = false;
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    placeholderText.style.display = 'none';
+                    draw();
+                }
+                personImage.src = url;
+
+            } catch (error) {
+                console.error(error);
+                showToast('이미지 처리 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        // 그리기 함수
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (bgImage) {
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            }
+
+            if (personImage) {
+                const w = personImage.width * personState.scale;
+                const h = personImage.height * personState.scale;
+                ctx.drawImage(personImage, personState.x, personState.y, w, h);
+            }
+        }
+
+        // 이벤트 리스너
+        scaleSlider.addEventListener('input', function(e) {
+            if (!personImage) return;
+            const oldW = personImage.width * personState.scale;
+            const oldH = personImage.height * personState.scale;
+            const centerX = personState.x + oldW / 2;
+            const centerY = personState.y + oldH / 2;
+
+            personState.scale = parseFloat(e.target.value);
+
+            const newW = personImage.width * personState.scale;
+            const newH = personImage.height * personState.scale;
+
+            personState.x = centerX - newW / 2;
+            personState.y = centerY - newH / 2;
+
+            draw();
+        });
+
+        canvas.addEventListener('mousedown', function(e) {
+            if (!personImage) return;
+            const rect = canvas.getBoundingClientRect();
+
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            const w = personImage.width * personState.scale;
+            const h = personImage.height * personState.scale;
+
+            const padding = 20;
+
+            if (mouseX >= personState.x - padding && mouseX <= personState.x + w + padding &&
+                mouseY >= personState.y - padding && mouseY <= personState.y + h + padding) {
+                personState.isDragging = true;
+                personState.dragOffsetX = mouseX - personState.x;
+                personState.dragOffsetY = mouseY - personState.y;
+            }
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (personState.isDragging) {
+                const rect = canvas.getBoundingClientRect();
+
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+
+                const mouseX = (e.clientX - rect.left) * scaleX;
+                const mouseY = (e.clientY - rect.top) * scaleY;
+
+                personState.x = mouseX - personState.dragOffsetX;
+                personState.y = mouseY - personState.dragOffsetY;
+
+                draw();
+            }
+        });
+
+        window.addEventListener('mouseup', function() {
+            personState.isDragging = false;
+        });
+
+        // 다운로드 및 리셋
+        function downloadImage() {
+            if (!personImage && !bgImage) {
+                showToast('다운로드할 이미지가 없습니다.', 'error');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.download = 'composite_result.png';
+            link.href = canvas.toDataURL();
+            link.click();
+
+            showToast('이미지가 다운로드되었습니다! 🎉', 'success');
+        }
+
+        function resetCanvas() {
+            bgImage = null;
+            personImage = null;
+            personState.scale = 1.0;
+            scaleSlider.value = 1.0;
+            scaleSlider.disabled = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            placeholderText.style.display = 'block';
+            document.getElementById('personInput').value = '';
+            document.getElementById('bgInput').value = '';
+        }
+    </script>
+</body>
+</html>
